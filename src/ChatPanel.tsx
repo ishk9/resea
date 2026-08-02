@@ -73,10 +73,10 @@ export function ChatPanel({ focusTick }: { focusTick: number }) {
           value={text}
           placeholder={rootMode ? 'Ask your root question…' : `Branch from “${(selected!.question || 'this node').slice(0, 40)}”…`}
           onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submit(); } }}
+          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } }}
         />
         <div className="row">
-          <span className="hint">⌘↵ to {rootMode ? 'plant' : 'branch'}</span>
+          <span className="hint">↵ to {rootMode ? 'plant' : 'branch'} · ⇧↵ newline</span>
           <span className="spacer" />
           <button className="control primary" onClick={submit}>Ask →</button>
         </div>

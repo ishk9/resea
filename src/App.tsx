@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ReactFlowProvider } from '@xyflow/react';
 import { Canvas } from './Canvas';
 import { ChatPanel } from './ChatPanel';
+import { Dropdown } from './components/Dropdown';
 import { useStore } from './store';
 
-const MODELS = ['sonnet', 'opus', 'haiku', 'fable'];
+const MODELS = ['sonnet', 'opus', 'haiku', 'fable'].map((m) => ({ value: m, label: m }));
 
 export default function App() {
   const boot = useStore((s) => s.boot);
@@ -12,6 +13,7 @@ export default function App() {
   const treeId = useStore((s) => s.treeId);
   const openTree = useStore((s) => s.openTree);
   const newTree = useStore((s) => s.newTree);
+  const renameTree = useStore((s) => s.renameTree);
   const nodeCount = useStore((s) => Object.keys(s.nodes).length);
   const model = useStore((s) => s.model);
   const setModel = useStore((s) => s.setModel);
@@ -21,7 +23,11 @@ export default function App() {
   const tidy = useStore((s) => s.tidy);
 
   const [focusTick, setFocusTick] = useState(0);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [draftTitle, setDraftTitle] = useState('');
+  const titleRef = useRef<HTMLInputElement>(null);
   useEffect(() => { boot(); }, [boot]);
+  useEffect(() => { if (editingTitle) titleRef.current?.select(); }, [editingTitle]);
 
   const onAdd = useCallback((parentId: string) => {
     select(parentId);
@@ -33,19 +39,42 @@ export default function App() {
     setFocusTick((t) => t + 1);
   }, [startRootMode]);
 
+  const currentTree = trees.find((t) => t.id === treeId);
+  const beginEdit = () => { setDraftTitle(currentTree?.title || ''); setEditingTitle(true); };
+  const commitEdit = () => {
+    if (treeId) renameTree(treeId, draftTitle);
+    setEditingTitle(false);
+  };
+
   return (
     <div className="app">
       <div className="topbar">
         <div className="brand"><span className="mark">❯</span> TreeChat</div>
-        <select className="control" value={treeId ?? ''} onChange={(e) => openTree(e.target.value)}>
-          {trees.map((t) => <option key={t.id} value={t.id}>{t.title || 'Untitled'}</option>)}
-        </select>
+        {editingTitle ? (
+          <input
+            ref={titleRef}
+            className="control title-edit"
+            value={draftTitle}
+            onChange={(e) => setDraftTitle(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') setEditingTitle(false); }}
+            onBlur={commitEdit}
+          />
+        ) : (
+          <Dropdown
+            value={treeId}
+            options={trees.map((t) => ({ value: t.id, label: t.title || 'Untitled' }))}
+            onChange={openTree}
+            width={220}
+            placeholder="No trees"
+          />
+        )}
+        <button className="iconbtn" title="Rename tree" onClick={editingTitle ? commitEdit : beginEdit}>
+          {editingTitle ? '✓' : '✎'}
+        </button>
         <button className="control" onClick={newTree}>+ Tree</button>
         <div className="spacer" />
         {!claudeOk && <span className="offline">claude CLI not found — install &amp; log in</span>}
-        <select className="control" value={model} onChange={(e) => setModel(e.target.value)}>
-          {MODELS.map((m) => <option key={m} value={m}>{m}</option>)}
-        </select>
+        <Dropdown value={model} options={MODELS} onChange={setModel} width={110} />
         <button className="control" onClick={tidy} disabled={!nodeCount}>Tidy</button>
         <button className="control primary" onClick={startRoot}>+ Root</button>
       </div>
