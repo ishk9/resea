@@ -21,6 +21,8 @@ export default function App() {
   const select = useStore((s) => s.select);
   const startRootMode = useStore((s) => s.startRoot);
   const tidy = useStore((s) => s.tidy);
+  const theme = useStore((s) => s.theme);
+  const toggleTheme = useStore((s) => s.toggleTheme);
 
   const [focusTick, setFocusTick] = useState(0);
   const [editingTitle, setEditingTitle] = useState(false);
@@ -74,6 +76,7 @@ export default function App() {
         <button className="control" onClick={newTree}>+ Tree</button>
         <div className="spacer" />
         {!claudeOk && <span className="offline">claude CLI not found — install &amp; log in</span>}
+        <button className="control" title="Toggle light / dark" onClick={toggleTheme}>{theme === 'dark' ? '☀' : '☾'}</button>
         <Dropdown value={model} options={MODELS} onChange={setModel} width={110} />
         <button className="control" onClick={tidy} disabled={!nodeCount}>Tidy</button>
         <button className="control primary" onClick={startRoot}>+ Root</button>

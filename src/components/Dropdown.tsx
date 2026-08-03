@@ -14,8 +14,19 @@ export function Dropdown({
   renderRow?: (o: Option, active: boolean) => ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  const [dropUp, setDropUp] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const current = options.find((o) => o.value === value);
+
+  // Flip the menu upward when there isn't room below (e.g. dropdowns near the panel bottom).
+  const toggle = () => {
+    if (!open) {
+      const r = ref.current?.getBoundingClientRect();
+      const need = Math.min(340, options.length * 38 + 12);
+      setDropUp(!!r && window.innerHeight - r.bottom < need && r.top > need);
+    }
+    setOpen((o) => !o);
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -28,12 +39,12 @@ export function Dropdown({
 
   return (
     <div className="dd" ref={ref} style={width ? { width } : undefined}>
-      <button className="control dd-trigger" onClick={() => setOpen((o) => !o)} title={current?.label}>
+      <button className="control dd-trigger" onClick={toggle} title={current?.label}>
         <span className="dd-value">{current?.label ?? placeholder}</span>
         <span className={`dd-caret${open ? ' up' : ''}`}>▾</span>
       </button>
       {open && (
-        <div className="dd-menu" role="listbox">
+        <div className={`dd-menu${dropUp ? ' drop-up' : ''}`} role="listbox">
           {options.map((o) => {
             const active = o.value === value;
             return (

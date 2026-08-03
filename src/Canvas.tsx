@@ -14,6 +14,7 @@ export function Canvas({ onAdd }: { onAdd: (parentId: string) => void }) {
   const treeId = useStore((s) => s.treeId);
   const selectedId = useStore((s) => s.selectedId);
   const collapsed = useStore((s) => s.collapsed);
+  const theme = useStore((s) => s.theme);
   const links = useStore((s) => s.links);
   const linkMode = useStore((s) => s.linkMode);
   const select = useStore((s) => s.select);
@@ -114,7 +115,7 @@ export function Canvas({ onAdd }: { onAdd: (parentId: string) => void }) {
       <MiniMap
         pannable zoomable
         nodeColor={(n) => (pathIds.has(n.id) ? 'var(--amber-dim)' : 'var(--line)')}
-        maskColor="rgba(14,20,32,0.7)"
+        maskColor={theme === 'light' ? 'rgba(238,241,247,0.7)' : 'rgba(14,20,32,0.7)'}
       />
     </ReactFlow>
   );

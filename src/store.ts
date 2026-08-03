@@ -5,6 +5,11 @@ import { childPosition, layoutTree } from './lib/layout';
 // Live EventSource abort fns per streaming node (not React state — just refs).
 const streams: Record<string, () => void> = {};
 
+type Theme = 'dark' | 'light';
+const initialTheme: Theme = (localStorage.getItem('treechat:theme') as Theme) || 'dark';
+function applyTheme(t: Theme) { document.documentElement.dataset.theme = t; }
+applyTheme(initialTheme); // apply before first paint
+
 interface State {
   claudeOk: boolean;
   trees: Tree[];
@@ -17,7 +22,9 @@ interface State {
   links: Record<string, string[]>; // node id -> extra context source ids (DAG links)
   linkMode: boolean; // when true, clicking a node links it as a source for the selected node
   compareIds: [string, string] | null; // A/B pair shown side-by-side in the panel
+  theme: Theme;
 
+  toggleTheme: () => void;
   boot: () => Promise<void>;
   openTree: (id: string) => Promise<void>;
   newTree: () => Promise<void>;
@@ -78,6 +85,14 @@ export const useStore = create<State>((set, get) => ({
   links: {},
   linkMode: false,
   compareIds: null,
+  theme: initialTheme,
+
+  toggleTheme: () => set((s) => {
+    const theme: Theme = s.theme === 'dark' ? 'light' : 'dark';
+    localStorage.setItem('treechat:theme', theme);
+    applyTheme(theme);
+    return { theme };
+  }),
 
   boot: async () => {
     const [{ claude }, trees] = await Promise.all([api.health(), api.listTrees()]);
