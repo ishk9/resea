@@ -6,7 +6,7 @@ import { childPosition, layoutTree } from './lib/layout';
 const streams: Record<string, () => void> = {};
 
 type Theme = 'dark' | 'light';
-const initialTheme: Theme = (localStorage.getItem('treechat:theme') as Theme) || 'dark';
+const initialTheme: Theme = (localStorage.getItem('treechat:theme') as Theme) || 'light';
 function applyTheme(t: Theme) { document.documentElement.dataset.theme = t; }
 applyTheme(initialTheme); // apply before first paint
 
@@ -23,6 +23,7 @@ interface State {
   linkMode: boolean; // when true, clicking a node links it as a source for the selected node
   compareIds: [string, string] | null; // A/B pair shown side-by-side in the panel
   theme: Theme;
+  fitTick: number; // bumped to ask the canvas to fitView (after tidy)
 
   toggleTheme: () => void;
   boot: () => Promise<void>;
@@ -86,6 +87,7 @@ export const useStore = create<State>((set, get) => ({
   linkMode: false,
   compareIds: null,
   theme: initialTheme,
+  fitTick: 0,
 
   toggleTheme: () => set((s) => {
     const theme: Theme = s.theme === 'dark' ? 'light' : 'dark';
@@ -234,6 +236,7 @@ export const useStore = create<State>((set, get) => ({
       for (const n of nodes) next[n.id] = { ...next[n.id], ...pos[n.id] };
       return { nodes: next };
     });
+    set((s) => ({ fitTick: s.fitTick + 1 })); // recenter the camera on the fresh layout
     await Promise.all(nodes.map((n) => api.patchNode(n.id, pos[n.id]).catch(() => {})));
   },
 }));

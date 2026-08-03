@@ -21,7 +21,8 @@ export function Canvas({ onAdd }: { onAdd: (parentId: string) => void }) {
   const moveNode = useStore((s) => s.moveNode);
   const toggleCollapse = useStore((s) => s.toggleCollapse);
   const addLink = useStore((s) => s.addLink);
-  const { setViewport } = useReactFlow();
+  const fitTick = useStore((s) => s.fitTick);
+  const { setViewport, fitView } = useReactFlow();
 
   const pathIds = useMemo(() => new Set(activePathIds(nodes, selectedId)), [nodes, selectedId]);
   const hidden = useMemo(() => hiddenIds(nodes, collapsed), [nodes, collapsed]);
@@ -88,6 +89,14 @@ export function Canvas({ onAdd }: { onAdd: (parentId: string) => void }) {
   const onMoveEnd = useCallback((_: unknown, vp: Viewport) => {
     if (treeId) localStorage.setItem(vpKey(treeId), JSON.stringify(vp));
   }, [treeId]);
+
+  // Tidy asks (via fitTick) to recenter the camera on the fresh layout. rAF so the
+  // relayouted nodes are committed to React Flow before we fit.
+  useEffect(() => {
+    if (!fitTick) return;
+    const id = requestAnimationFrame(() => fitView({ padding: 0.3, duration: 450, maxZoom: 1 }));
+    return () => cancelAnimationFrame(id);
+  }, [fitTick, fitView]);
 
   return (
     <ReactFlow
