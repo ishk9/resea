@@ -14,9 +14,12 @@ export function Canvas({ onAdd }: { onAdd: (parentId: string) => void }) {
   const treeId = useStore((s) => s.treeId);
   const selectedId = useStore((s) => s.selectedId);
   const collapsed = useStore((s) => s.collapsed);
+  const links = useStore((s) => s.links);
+  const linkMode = useStore((s) => s.linkMode);
   const select = useStore((s) => s.select);
   const moveNode = useStore((s) => s.moveNode);
   const toggleCollapse = useStore((s) => s.toggleCollapse);
+  const addLink = useStore((s) => s.addLink);
   const { setViewport } = useReactFlow();
 
   const pathIds = useMemo(() => new Set(activePathIds(nodes, selectedId)), [nodes, selectedId]);
@@ -49,18 +52,30 @@ export function Canvas({ onAdd }: { onAdd: (parentId: string) => void }) {
           },
         })),
     );
-    setRfEdges(
-      Object.values(nodes)
-        .filter((n) => n.parent_id && !hidden.has(n.id) && !hidden.has(n.parent_id!))
-        .map((n) => ({
-          id: `${n.parent_id}->${n.id}`,
-          source: n.parent_id!,
-          target: n.id,
-          type: 'smoothstep',
-          className: pathIds.has(n.id) && pathIds.has(n.parent_id!) ? 'path' : undefined,
+    const treeEdges: Edge[] = Object.values(nodes)
+      .filter((n) => n.parent_id && !hidden.has(n.id) && !hidden.has(n.parent_id!))
+      .map((n) => ({
+        id: `${n.parent_id}->${n.id}`,
+        source: n.parent_id!,
+        target: n.id,
+        type: 'smoothstep',
+        className: pathIds.has(n.id) && pathIds.has(n.parent_id!) ? 'path' : undefined,
+      }));
+    // DAG context links: dashed, distinctly-colored (cyan, not amber) edges from source → node.
+    const linkEdges: Edge[] = Object.entries(links).flatMap(([nodeId, sources]) =>
+      (sources || [])
+        .filter((sid) => nodes[nodeId] && nodes[sid] && !hidden.has(nodeId) && !hidden.has(sid))
+        .map((sid) => ({
+          id: `link:${sid}->${nodeId}`,
+          source: sid,
+          target: nodeId,
+          type: 'default',
+          className: 'link',
+          zIndex: 0,
         })),
     );
-  }, [nodes, selectedId, pathIds, hidden, collapsed, childCounts, onAdd, toggleCollapse, setRfNodes, setRfEdges]);
+    setRfEdges([...treeEdges, ...linkEdges]);
+  }, [nodes, selectedId, pathIds, hidden, collapsed, childCounts, links, onAdd, toggleCollapse, setRfNodes, setRfEdges]);
 
   // Viewport persistence: restore on tree switch, save on move. Prior-art's #1 complaint.
   useEffect(() => {
@@ -80,8 +95,13 @@ export function Canvas({ onAdd }: { onAdd: (parentId: string) => void }) {
       nodeTypes={nodeTypes}
       onNodesChange={onNodesChange}
       onNodeDragStop={(_, n) => moveNode(n.id, n.position.x, n.position.y)}
-      onNodeClick={(_, n) => select(n.id)}
+      onNodeClick={(_, n) => {
+        // In link mode a click adds that node as a context source for the currently-selected node.
+        if (linkMode && selectedId && n.id !== selectedId) addLink(selectedId, n.id);
+        else select(n.id);
+      }}
       onPaneClick={() => select(null)}
+      className={linkMode ? 'linking' : undefined}
       onMoveEnd={onMoveEnd}
       minZoom={0.2}
       maxZoom={1.75}

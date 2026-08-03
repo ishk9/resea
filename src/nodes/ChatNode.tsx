@@ -12,14 +12,24 @@ export interface ChatNodeData extends Record<string, unknown> {
 
 const firstLine = (s: string) => s.split('\n')[0];
 
+// Compact token/cost/timing badge for the node foot.
+export function metaLabel(n: TreeNode): string | null {
+  const bits: string[] = [];
+  if (n.tokens_in != null || n.tokens_out != null) bits.push(`${n.tokens_in ?? 0}↑ ${n.tokens_out ?? 0}↓`);
+  if (n.cost_usd != null) bits.push(`$${n.cost_usd.toFixed(4)}`);
+  if (n.duration_ms != null) bits.push(`${(n.duration_ms / 1000).toFixed(1)}s`);
+  return bits.length ? bits.join(' · ') : null;
+}
+
 export function ChatNode({ data, selected }: NodeProps & { data: ChatNodeData }) {
   const { node, childCount, onPath, collapsed, onAdd, onToggle } = data;
   const zoom = useRFStore((s) => s.transform[2]);
   const far = zoom < 0.45; // level-of-detail: drop the answer when zoomed out
 
   const isRoot = !node.parent_id;
-  const cls = ['node', isRoot && 'root', selected && 'selected', onPath && !selected && 'onpath', far && 'far']
+  const cls = ['node', isRoot && 'root', selected && 'selected', onPath && !selected && 'onpath', far && 'far', node.status === 'stale' && 'stale']
     .filter(Boolean).join(' ');
+  const meta = metaLabel(node);
 
   return (
     <div className={cls}>
@@ -33,6 +43,7 @@ export function ChatNode({ data, selected }: NodeProps & { data: ChatNodeData })
       <div className="foot">
         <span className={`dot ${node.status}`} />
         <span>{node.model || 'sonnet'}</span>
+        {!far && meta && <span className="meta" title="tokens in↑/out↓ · cost · time">{meta}</span>}
         {childCount > 0 && (
           <button
             className="kids"

@@ -54,7 +54,16 @@ export function runClaude({ prompt, model = 'sonnet', system, cwd = tmpdir() }, 
             reject(new Error(ev.result || ev.subtype || 'claude error'));
           } else {
             // Prefer the authoritative result text; fall back to accumulated deltas.
-            resolve(ev.result ?? full);
+            resolve({
+              text: ev.result ?? full,
+              meta: {
+                tokens_in: ev.usage?.input_tokens ?? null,
+                tokens_out: ev.usage?.output_tokens ?? null,
+                cost_usd: ev.total_cost_usd ?? null,
+                duration_ms: ev.duration_ms ?? null,
+                model,
+              },
+            });
           }
         }
       }

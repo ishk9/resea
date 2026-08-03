@@ -1,6 +1,7 @@
 import { runClaude } from './claude.js';
 
-// Pluggable reasoning backends. Each driver: ({prompt, model}, {onDelta, signal}) => Promise<fullText>.
+// Pluggable reasoning backends. Each driver: ({prompt, model}, {onDelta, signal})
+// => Promise<{ text, meta:{tokens_in,tokens_out,cost_usd,duration_ms,model} }>.
 // The UI's model picker chooses within a driver; a future codex driver plugs in here with no
 // changes to routes or the store — same streaming contract.
 const drivers = {

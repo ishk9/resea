@@ -30,7 +30,7 @@ app.patch('/api/trees/:id', (req, res) => res.json(db.renameTree(req.params.id, 
 app.get('/api/trees/:id', (req, res) => {
   const tree = db.getTree(req.params.id);
   if (!tree) return res.status(404).json({ error: 'not found' });
-  res.json({ tree, nodes: db.nodesByTree(req.params.id) });
+  res.json({ tree, nodes: db.nodesByTree(req.params.id), links: db.linksByTree(req.params.id) });
 });
 
 // --- Nodes ---
@@ -42,15 +42,63 @@ app.post('/api/nodes', (req, res) => {
 });
 
 app.patch('/api/nodes/:id', (req, res) => {
-  const { x, y, question } = req.body || {};
-  if (x != null && y != null) db.setPosition(req.params.id, x, y);
-  if (question != null) db.setQuestion(req.params.id, question);
-  res.json(db.getNode(req.params.id));
+  const { x, y, question, context_mode, context_pick } = req.body || {};
+  const id = req.params.id;
+  const prev = db.getNode(id);
+  if (!prev) return res.status(404).json({ error: 'not found' });
+  if (x != null && y != null) db.setPosition(id, x, y);
+  if (context_mode != null) db.setContextMode(id, context_mode, context_pick ?? null);
+  let staleIds = [];
+  if (question != null) {
+    db.setQuestion(id, question);
+    // Editing the question invalidates every descendant answer — grey them out.
+    if (question !== prev.question) staleIds = db.markDescendantsStale(id);
+  }
+  res.json({ node: db.getNode(id), staleIds });
 });
 
 app.delete('/api/nodes/:id', (req, res) => {
   db.deleteNode(req.params.id);
   res.json({ ok: true });
+});
+
+// --- DAG context links: extra sources for a node beyond its tree parent. ---
+app.post('/api/nodes/:id/links', (req, res) => {
+  const { sourceId } = req.body || {};
+  if (!sourceId) return res.status(400).json({ error: 'sourceId required' });
+  db.addLink(req.params.id, sourceId);
+  res.json({ links: db.getLinks(req.params.id) });
+});
+app.delete('/api/nodes/:id/links', (req, res) => {
+  const sourceId = req.body?.sourceId || req.query.sourceId;
+  if (!sourceId) return res.status(400).json({ error: 'sourceId required' });
+  db.removeLink(req.params.id, sourceId);
+  res.json({ links: db.getLinks(req.params.id) });
+});
+
+// --- Export: markdown of the root→node thread (path) or the node's subtree. ---
+app.get('/api/nodes/:id/export', (req, res) => {
+  const node = db.getNode(req.params.id);
+  if (!node) return res.status(404).end();
+  const scope = req.query.scope === 'subtree' ? 'subtree' : 'path';
+  let md;
+  if (scope === 'subtree') {
+    // Depth-first, heading level = depth relative to the exported root.
+    const nodes = db.subtree(req.params.id);
+    const depth = new Map([[req.params.id, 0]]);
+    md = nodes.map((n) => {
+      const d = n.parent_id != null && depth.has(n.parent_id) ? depth.get(n.parent_id) + 1 : 0;
+      depth.set(n.id, d);
+      const h = '#'.repeat(Math.min(6, d + 1));
+      return `${h} ${n.question || '(untitled)'}\n\n${n.answer || ''}`;
+    }).join('\n\n');
+  } else {
+    md = db.getPath(req.params.id)
+      .map((n) => `## ${n.question || '(untitled)'}\n\n${n.answer || ''}`)
+      .join('\n\n');
+  }
+  res.set('Content-Type', 'text/markdown; charset=utf-8');
+  res.send(md);
 });
 
 // Stream the answer for a node via SSE. Assembles root→node path as context.
@@ -71,18 +119,28 @@ app.get('/api/nodes/:id/stream', async (req, res) => {
 
   db.setStatus(node.id, 'streaming');
   const prompt = buildPrompt(node.id);
+  let acc = ''; // accumulate deltas so a Stop can persist the partial answer
   try {
-    const full = await runBackend(
+    const { text, meta = {} } = await runBackend(
       { prompt, model: node.model || 'sonnet' },
-      { signal: ac.signal, onDelta: (t) => send('delta', { text: t }) },
+      { signal: ac.signal, onDelta: (t) => { acc += t; send('delta', { text: t }); } },
     );
-    db.setAnswer(node.id, full, 'done');
-    send('done', { answer: full });
+    db.setResult(node.id, { answer: text, status: 'done', meta });
+    send('done', { answer: text, meta });
   } catch (err) {
-    db.setStatus(node.id, 'error');
-    send('error', { message: String(err.message || err) });
+    // User Stop (client closed → abort): keep whatever streamed, don't record a failure.
+    // Guard the status write so a stale abort can't clobber a newer regenerate that
+    // already flipped this node back to 'streaming'.
+    if (ac.signal.aborted) {
+      if (db.getNode(node.id)?.status === 'streaming') {
+        db.setResult(node.id, { answer: acc, status: 'done', meta: {} });
+      }
+    } else {
+      db.setStatus(node.id, 'error');
+      try { send('error', { message: String(err.message || err) }); } catch { /* socket gone */ }
+    }
   }
-  res.end();
+  try { res.end(); } catch { /* socket already closed on abort */ }
 });
 
 // --- Serve built frontend if present ---
