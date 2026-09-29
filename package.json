@@ -3,6 +3,28 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "main": "./extension.cjs",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "treechat.open",
+        "title": "TreeChat: Open"
+      },
+      {
+        "command": "treechat.connect",
+        "title": "TreeChat: Connect agents"
+      }
+    ],
+    "mcpServerDefinitionProviders": [
+      {
+        "id": "treechat",
+        "label": "TreeChat"
+      }
+    ]
+  },
   "bin": {
     "treechat": "server/index.js"
   },

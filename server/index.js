@@ -23,6 +23,49 @@ try {
 }
 app.get('/api/health', (_req, res) => res.json({ claude: claudeOk }));
 
+// --- Agent bridge: any MCP-capable chat (Copilot, Claude Code, Codex) answers; we store the tree. ---
+// The canvas reports its selection here; server/mcp.js reads it to know where the next answer goes.
+let selection = { treeId: null, nodeId: null };
+app.put('/api/selection', (req, res) => {
+  selection = { treeId: req.body?.treeId ?? null, nodeId: req.body?.nodeId ?? null };
+  res.json(selection);
+});
+
+// Live canvas updates: open SSE clients get { treeId, nodeId } whenever an agent adds a node.
+const clients = new Set();
+app.get('/api/events', (req, res) => {
+  res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
+  res.flushHeaders?.();
+  clients.add(res);
+  req.on('close', () => clients.delete(res));
+});
+const broadcast = (data) => { for (const c of clients) c.write(`data: ${JSON.stringify(data)}\n\n`); };
+
+// root→selected thread, for the agent to answer from. Empty path = the next answer starts a new root.
+app.get('/api/context', (_req, res) => {
+  const tree = selection.treeId && db.getTree(selection.treeId);
+  if (!tree) return res.status(409).json({ error: 'TreeChat canvas is not open. Run "TreeChat: Open" in VS Code.' });
+  const path = selection.nodeId && db.getNode(selection.nodeId) ? db.getPath(selection.nodeId) : [];
+  res.json({ tree: { id: tree.id, title: tree.title }, path: path.map(({ id, question, answer }) => ({ id, question, answer })) });
+});
+
+// Record an agent's answer as a child of parentId (or a new root when parentId is null).
+app.post('/api/record', (req, res) => {
+  const { question, answer, parentId = null, model = null } = req.body || {};
+  if (!question || !answer) return res.status(400).json({ error: 'question and answer required' });
+  const parent = parentId && db.getNode(parentId);
+  if (parentId && !parent) return res.status(404).json({ error: `no node ${parentId}` });
+  const treeId = parent ? parent.tree_id : selection.treeId;
+  if (!treeId || !db.getTree(treeId)) return res.status(409).json({ error: 'TreeChat canvas is not open. Run "TreeChat: Open" in VS Code.' });
+  // First root question names an untitled tree.
+  if (!parent && !db.nodesByTree(treeId).length) db.renameTree(treeId, question.slice(0, 60));
+  const node = db.createNode({ treeId, parentId, question, model });
+  db.setResult(node.id, { answer, status: 'done', meta: { model } });
+  selection = { treeId, nodeId: node.id };
+  broadcast({ treeId, nodeId: node.id });
+  res.json(db.getNode(node.id));
+});
+
 // --- Trees ---
 app.get('/api/trees', (_req, res) => res.json(db.listTrees()));
 app.post('/api/trees', (req, res) => res.json(db.createTree(req.body?.title)));
