@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "treechat": {
+      "command": "node",
+      "args": ["${workspaceFolder}/server/mcp.js"]
+    }
+  }
+}

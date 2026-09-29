@@ -1,28 +1,27 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
-export interface Option { value: string; label: string; hint?: string }
+export interface Option { value: string; label: string }
 
 // Styled dropdown replacing native <select> (whose open list can't be CSS-styled).
 export function Dropdown({
-  value, options, onChange, width, placeholder = 'Select', renderRow,
+  value, options, onChange, width, placeholder = 'Select',
 }: {
   value: string | null;
   options: Option[];
   onChange: (value: string) => void;
   width?: number;
   placeholder?: string;
-  renderRow?: (o: Option, active: boolean) => ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [dropUp, setDropUp] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const current = options.find((o) => o.value === value);
 
-  // Flip the menu upward when there isn't room below (e.g. dropdowns near the panel bottom).
+  // Flip the menu upward when there isn't room below (e.g. the model picker in the composer).
   const toggle = () => {
     if (!open) {
       const r = ref.current?.getBoundingClientRect();
-      const need = Math.min(340, options.length * 38 + 12);
+      const need = Math.min(320, options.length * 34 + 12);
       setDropUp(!!r && window.innerHeight - r.bottom < need && r.top > need);
     }
     setOpen((o) => !o);
@@ -39,9 +38,11 @@ export function Dropdown({
 
   return (
     <div className="dd" ref={ref} style={width ? { width } : undefined}>
-      <button className="control dd-trigger" onClick={toggle} title={current?.label}>
+      <button className="btn dd-trigger" onClick={toggle} title={current?.label} aria-haspopup="listbox" aria-expanded={open}>
         <span className="dd-value">{current?.label ?? placeholder}</span>
-        <span className={`dd-caret${open ? ' up' : ''}`}>▾</span>
+        <svg className={`dd-caret${open ? ' up' : ''}`} viewBox="0 0 10 10" width="8" height="8" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <path d="M2 3.5 5 6.5 8 3.5" />
+        </svg>
       </button>
       {open && (
         <div className={`dd-menu${dropUp ? ' drop-up' : ''}`} role="listbox">
@@ -55,13 +56,7 @@ export function Dropdown({
                 aria-selected={active}
                 onClick={() => { onChange(o.value); setOpen(false); }}
               >
-                {renderRow ? renderRow(o, active) : (
-                  <>
-                    <span className="dd-check">{active ? '✓' : ''}</span>
-                    <span className="dd-label">{o.label}</span>
-                    {o.hint && <span className="dd-hint">{o.hint}</span>}
-                  </>
-                )}
+                {o.label}
               </button>
             );
           })}
